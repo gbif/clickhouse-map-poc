@@ -116,7 +116,7 @@ SETTINGS
     max_execution_time = 180,
     priority CHANGEABLE_IN_READONLY,
     readonly = 1;
-GRANT SELECT OMN default.gbif_mercator TO tim;
+GRANT SELECT ON default.gbif_mercator TO tim;
 ```
 
 Add a config file in `/etc/clickhouse-server/config.d/map.xml` to enable the 
