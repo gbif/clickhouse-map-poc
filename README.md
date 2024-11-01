@@ -49,7 +49,7 @@ Get the data onto the machine:
  sudo mv * /var/lib/clickhouse/user_files/gbif
 ```
 
-Bring raw data into clickhouse:
+Bring raw data into clickhouse (this could be adapted to just use Iceberg directly):
 
 ```
 DROP TABLE if exists occurrence;
