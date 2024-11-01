@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GBIF Pixels</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="never">
+    <meta name="referrer" content="no-referrer">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ==" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js" integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew==" crossorigin=""></script>
+</head>
+<body>
+
+<div id="app">
+    <div id="map" style="height: 100%; width:100%"></div>
+</div>
+</body>
+</html>
+<style>
+    html, body, div#app {
+       height: 100%;
+    }
+</style>
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+      map = L.map('map');
+
+      L.tileLayer('https://tile.gbif.org/3857/omt/{z}/{x}/{y}@2x.png?style=gbif-dark', {
+        zoomOffset: -1,
+        tileSize: 512,
+        minZoom: 2,
+        maxNativeZoom: 19,
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap contributors</a>'
+      }).addTo(map);
+
+      map.setView([55.67, 12.57], 11);
+
+      let queries = {
+        "test" : `
+        WITH
+          bitShiftLeft(1::UInt64, {z:UInt8}) AS zoom_factor,
+          bitShiftLeft(1::UInt64, 32 - {z:UInt8}) AS tile_size,
+          tile_size * {x:UInt16} AS tile_x_begin,
+          tile_size * ({x:UInt16} + 1) AS tile_x_end,
+          tile_size * {y:UInt16} AS tile_y_begin,
+          tile_size * ({y:UInt16} + 1) AS tile_y_end,
+          mercator_x >= tile_x_begin AND mercator_x < tile_x_end
+          AND mercator_y >= tile_y_begin AND mercator_y < tile_y_end AS in_tile,
+          bitShiftRight(mercator_x - tile_x_begin, 32 - 10 - {z:UInt8}) AS x,
+          bitShiftRight(mercator_y - tile_y_begin, 32 - 10 - {z:UInt8}) AS y,
+          y * 1024 + x AS pos,
+          sum(occcount) AS total,
+          30000 AS max_total,
+          pow(total / greatest(max_total, total), 1/7) AS transparency,
+          255 * transparency AS alpha,
+          255 AS red,
+          255 * pow(total / greatest(max_total, total), 1/10) AS green,
+          255 * pow(total / greatest(max_total, total), 1/10) AS blue
+        SELECT round(red)::UInt8, round(green)::UInt8, round(blue)::UInt8, round(alpha)::UInt8
+        FROM gbif_mercator
+        WHERE in_tile
+        GROUP BY pos ORDER BY pos WITH FILL FROM 0 TO 1024*1024`
+      };
+
+      let cached_tiles = {};
+      let query_sequence_num = 0;
+
+      async function render(priority, coords, tile) {
+          const sql = queries.test;
+          console.log(sql);
+          const key = `${sql}-${coords.z}-${coords.x}-${coords.y}`;
+
+          if (!cached_tiles[key]) cached_tiles[key] = [];
+          buf = cached_tiles[key][priority];
+
+          if (!buf) {
+            ++query_sequence_num;
+
+            // replace_running_query removed
+            let url = `http://scrap-vh.gbif-dev.org:8123/?user=tim&default_format=RowBinary&param_z=${coords.z - 2}&param_x=${coords.x}&param_y=${coords.y}`;
+            try {
+              let response = await fetch(url, { method: 'POST', body: sql });
+              buf = await response.arrayBuffer();
+              cached_tiles[key][priority] = buf;
+
+            } catch (error) {
+              const response = error.errors[0].payload;
+              const text = await response.text();
+              console.log(text);
+              return;
+            }
+          }
+          let ctx = tile.getContext('2d');
+          let image = ctx.createImageData(1024, 1024, {colorSpace: 'display-p3'});
+          let arr = new Uint8ClampedArray(buf);
+          for (let i = 0; i < 1024 * 1024 * 4; ++i) {
+            image.data[i] = arr[i];
+          }
+          ctx.putImageData(image, 0, 0, 0, 0, 1024, 1024);
+
+        }
+
+        L.GridLayer.ClickHouse = L.GridLayer.extend({
+            createTile: function(coords, done) {
+                let tile = L.DomUtil.create('canvas', 'leaflet-tile');
+                tile.width = 1024;
+                tile.height = 1024;
+                render(this.options.priority, coords, tile).then(err => done(err, tile));
+                return tile;
+            }
+        });
+
+        const layer_options = {
+            tileSize: 1024,
+            minZoom: 2,
+            maxZoom: 19,
+            minNativeZoom: 2,
+            maxNativeZoom: 16,
+            attribution: 'GBIF',
+            priority: 1
+        };
+        let gbif_layer = new L.GridLayer.ClickHouse(layer_options);
+
+        gbif_layer.addTo(map);
+    });
+</script>
