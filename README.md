@@ -15,7 +15,7 @@ The following illustrates the output with all GBIF data.
 The following illustrates the general procedure, but may have errors.
 
 The browser is issuing SQL directly to the clickhouse server. The SQL aggregates to pixel level, applies styling and returns a byte array for the tile.
-Leaflet is used to copy (not parse) the byte array straight onto the canvas. In production an intermediate service might sit between the browser and clickhouse.
+JS is used to copy (not parse) the byte array straight onto the canvas, and this is adapted for use in a Leaflet slippy map. In production an intermediate service might sit between the browser and clickhouse.
 The SQL can be adjusted to replicate any of the dimensions supported by the GBIF v2 map API.
 
 ### Prepare data
