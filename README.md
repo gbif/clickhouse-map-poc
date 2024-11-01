@@ -14,6 +14,10 @@ The following illustrates the output with all GBIF data.
 
 The following illustrates the general procedure, but may have errors.
 
+The browser is issuing SQL directly to the clickhouse server. The SQL aggregates to pixel level, applies styling and returns a byte array for the tile.
+Leaflet is used to copy (not parse) the byte array straight onto the canvas. In production an intermediate service might sit between the browser and clickhouse.
+The SQL can be adjusted to replicate any of the dimensions supported by the GBIF v2 map API.
+
 ### Prepare data
 
 This is using the production GBIF Hive warehouse. It would be easy to port this to use Iceberg.
@@ -54,12 +58,11 @@ SELECT * FROM file('gbif/*', Parquet)
 WHERE decimallatitude IS NOT NULL;
 ```
 
-Index for mercator projection (adapting this for ESPG:4326 would be feasible)
+Index for mercator projection (adapting this for ESPG:4326 would be feasible).
 
 ```
 DROP TABLE IF EXISTS gbif_mercator;
 SET allow_suspicious_low_cardinality_types=1;
-
 CREATE TABLE gbif_mercator
 (
     mercator_x UInt32 MATERIALIZED 0xFFFFFFFF * ((decimallongitude + 180) / 360),
@@ -140,4 +143,3 @@ HTTP service (necessary) and set up a static web (optional).
 
 Optional: copy the index.html file into `/var/lib/clickhouse/user_files/` to allow it 
 to be served from http://CLICKHOUSE/map.html. 
-
