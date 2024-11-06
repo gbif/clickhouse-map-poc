@@ -155,7 +155,7 @@ to be served from http://CLICKHOUSE/map.html.
 
 ### Hexagon maps
 
-The browser is issuing SQL directly to the clickhouse server. The SQL aggregates to an H3 level and returns JSON with the H3 cell and the count.
+The browser is [issuing SQL directly](https://github.com/gbif/clickhouse-map-poc/blob/main/examples/script.js#L28) to the clickhouse server. The SQL aggregates to an H3 level and returns JSON with the H3 cell and the count.
 A custom source is used for the LibreMap GL library to provide a slippy map (it is a quick hack, and would need some work).
 
 #### Setup clickhouse
